@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, proxy-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Cuestionario: Analizador de espectro</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #f0f4f8;
+            margin: 40px;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        #timer {
+            font-size: 1.2em;
+            color: #e74c3c;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .question {
+            margin-bottom: 25px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        input[type="text"], input[type="email"], textarea {
+            padding: 8px;
+            width: 100%;
+            max-width: 300px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        input[type="radio"] {
+            margin: 10px 5px;
+        }
+        button {
+            background-color: #3498db;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .disabled {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        .message {
+            color: #e74c3c;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+        }
+        #feedback {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+        }
+        .results-section {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cuestionario: Analizador de espectro</h1>
+        <div id="timer">Tiempo restante: 10:00</div>
+        <form id="quizForm">
+            <div>
+                <label>Nombre:</label>
+                <input type="text" id="nombre" required>
+            </div>
+            <div>
+                <label>Apellido:</label>
+                <input type="text" id="apellido" required>
+            </div>
+            <div>
+                <label>Correo:</label>
+                <input type="email" id="correo" required>
+            </div>
+            <div id="questions"></div>
+            <button type="submit">Enviar Cuestionario</button>
+        </form>
+        <div class="results-section">
+            <h3>Consultar Resultados</h3>
+            <label>Correo:</label>
+            <input type="email" id="checkCorreo" placeholder="Ingresa tu correo para ver resultados">
+            <button type="button" onclick="checkResults()">Consultar Resultados</button>
+        </div>
+        <div id="message" class="message"></div>
+        <div id="feedback"></div>
+    </div>
+
+    <script>
+        if (localStorage.getItem('quizSubmitted') === 'true') {
+            document.getElementById('quizForm').classList.add('disabled');
+            document.getElementById('timer').style.display = 'none';
+            document.getElementById('message').textContent = 'Ya has enviado el cuestionario desde este dispositivo. Ingresa tu correo y haz clic en "Consultar Resultados" para ver tu nota.';
+        }
+
+        async function loadQuestions() {
+            try {
+                const response = await fetch('/questions');
+                const questions = await response.json();
+                const questionsDiv = document.getElementById('questions');
+                questions.forEach(q => {
+                    const div = document.createElement('div');
+                    div.className = 'question';
+                    div.innerHTML = `
+                        <p>${q.id.replace('q', '')}. ${q.text}</p>
+                        ${q.options.map(opt => `
+                            <input type="radio" name="${q.id}" value="${opt.value}">
+                            ${opt.value}) ${opt.text}<br>
+                        `).join('')}
+                        <label>Justificación:</label><br>
+                        <textarea id="justification_${q.id}" name="justification_${q.id}" rows="4" required></textarea>
+                    `;
+                    questionsDiv.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error al cargar preguntas:', error);
+                document.getElementById('message').textContent = 'Error al cargar preguntas.';
+            }
+        }
+
+        let timeLeft = 600; // 10 minutos
+        let timer = setInterval(() => {
+            let minutes = Math.floor(timeLeft / 60);
+            let seconds = timeLeft % 60;
+            document.getElementById('timer').textContent = `Tiempo restante: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            timeLeft--;
+            if (timeLeft < 0) {
+                clearInterval(timer);
+                submitQuiz('automatic', 'timer');
+            }
+        }, 1000);
+
+        document.getElementById('quizForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            submitQuiz('manual');
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && localStorage.getItem('quizSubmitted') !== 'true') {
+                submitQuiz('automatic', 'tab');
+            }
+        });
+
+        async function submitQuiz(type, reason) {
+            if (localStorage.getItem('quizSubmitted') === 'true') {
+                document.getElementById('message').textContent = 'Ya has enviado el cuestionario desde este dispositivo. Ingresa tu correo y haz clic en "Consultar Resultados" para ver tu nota.';
+                return;
+            }
+
+            clearInterval(timer);
+            const form = document.getElementById('quizForm');
+            const messageDiv = document.getElementById('message');
+            const feedbackDiv = document.getElementById('feedback');
+            form.classList.add('disabled');
+
+            const nombre = document.getElementById('nombre').value;
+            const apellido = document.getElementById('apellido').value;
+            const correo = document.getElementById('correo').value;
+            const answers = {};
+            const justifications = {};
+            let questions;
+            try {
+                questions = await (await fetch('/questions')).json();
+            } catch (error) {
+                messageDiv.textContent = 'Error al cargar preguntas.';
+                console.error('Error en submitQuiz:', error);
+                return;
+            }
+
+            for (const q of questions) {
+                answers[q.id] = form[q.id] ? form[q.id].value : '';
+                justifications[q.id] = document.getElementById(`justification_${q.id}`).value;
+                if (answers[q.id] && !justifications[q.id]) {
+                    messageDiv.textContent = `Por favor, proporciona una justificación para la pregunta ${q.id.replace('q', '')}.`;
+                    form.classList.remove('disabled');
+                    return;
+                }
+            }
+
+            try {
+                const response = await fetch('/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    },
+                    body: JSON.stringify({ nombre, apellido, correo, answers, type, justifications, ip: await getIP() })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    localStorage.setItem('quizSubmitted', 'true');
+                    document.getElementById('timer').style.display = 'none';
+                    messageDiv.textContent = type === 'manual'
+                        ? 'Cuestionario enviado. Ingresa tu correo y haz clic en "Consultar Resultados" para ver tu nota cuando el profesor haya corregido.'
+                        : (reason === 'timer'
+                            ? 'El cuestionario fue enviado automáticamente porque se acabó el tiempo. Ingresa tu correo y haz clic en "Consultar Resultados" para ver tu nota.'
+                            : 'El cuestionario fue enviado automáticamente porque saliste de la pestaña. Ingresa tu correo y haz clic en "Consultar Resultados" para ver tu nota.');
+                    feedbackDiv.innerHTML = '<p>La corrección está en proceso. Revisa más tarde.</p>';
+                } else {
+                    messageDiv.textContent = result.message || 'Error al enviar el cuestionario. Por favor intenta de nuevo.';
+                    form.classList.remove('disabled');
+                }
+            } catch (error) {
+                messageDiv.textContent = 'Error de conexión con el servidor. Por favor verifica tu conexión e intenta de nuevo.';
+                console.error('Error en submitQuiz:', error);
+                form.classList.remove('disabled');
+            }
+        }
+
+        async function checkResults() {
+            const correo = document.getElementById('checkCorreo').value;
+            const messageDiv = document.getElementById('message');
+            const feedbackDiv = document.getElementById('feedback');
+
+            if (!correo) {
+                messageDiv.textContent = 'Por favor, ingresa tu correo para consultar los resultados.';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/check-results?correo=${correo}`, {
+                    headers: {
+                        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    if (result.corrected) {
+                        const answers = result.answers;
+                        const justifications = result.justifications;
+                        feedbackDiv.innerHTML = `
+                            <h3>Resultados</h3>
+                            <p>Puntuación: ${result.score}/${result.total}</p>
+                            ${Object.keys(answers).map(q => `
+                                <p>Pregunta ${q.replace('q', '')}: ${answers[q].value} (${answers[q].message})<br>
+                                Justificación: ${justifications[q] || 'No proporcionada'}<br>
+                                Comentario: ${answers[q].comment || 'Sin comentario'}</p>
+                            `).join('')}
+                        `;
+                    } else {
+                        feedbackDiv.innerHTML = '<p>La corrección está en proceso. Por favor, espera a que el profesor corrija tu examen.</p>';
+                    }
+                } else {
+                    messageDiv.textContent = result.message || 'No se encontró el cuestionario. Verifica que el correo sea correcto.';
+                }
+            } catch (error) {
+                messageDiv.textContent = 'Error al consultar resultados. Por favor, intenta de nuevo.';
+                console.error('Error en checkResults:', error);
+            }
+        }
+
+        async function getIP() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                return data.ip;
+            } catch (error) {
+                console.error('Error al obtener IP:', error);
+                return 'unknown';
+            }
+        }
+
+        window.onload = loadQuestions;
+    </script>
+</body>
+</html>

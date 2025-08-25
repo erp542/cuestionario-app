@@ -1,0 +1,14 @@
+{
+  "name": "cuestionario",
+  "version": "1.0.0",
+  "description": "Cuestionario de matemáticas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "sqlite3": "^5.1.6",
+    "dotenv": "^16.0.3"
+  }
+}

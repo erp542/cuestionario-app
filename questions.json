@@ -1,0 +1,52 @@
+[
+    {
+        "id": "q1",
+        "text": "¿Qué es un analizador de espectro?",
+        "options": [
+            { "value": "a", "text": "Un dispositivo que mide la potencia de una señal en función de su frecuencia." },
+            { "value": "b", "text": "Un instrumento que muestra la forma de onda de una señal en el dominio del tiempo." },
+            { "value": "c", "text": "Un equipo que genera una señal portadora modulada en frecuencia para transmisiones." }
+        ],
+        "correctAnswer": "a"
+    },
+    {
+        "id": "q2",
+        "text": "¿Cuál es la función principal del ancho de banda de resolución (RBW) en un analizador de espectro?",
+        "options": [
+            { "value": "a", "text": "Aumentar la potencia de la señal medida para mejorar la visualización." },
+            { "value": "b", "text": "Controlar la selectividad del analizador para distinguir señales cercanas en frecuencia." },
+            { "value": "c", "text": "Reducir el rango de frecuencias que el analizador puede medir." }
+        ],
+        "correctAnswer": "b"
+    },
+    {
+        "id": "q3",
+        "text": "¿Qué representa el eje vertical en la pantalla de un analizador de espectro?",
+        "options": [
+            { "value": "a", "text": "La frecuencia de la señal medida." },
+            { "value": "b", "text": "El tiempo de duración de la señal." },
+            { "value": "c", "text": "La amplitud o potencia de la señal." }
+        ],
+        "correctAnswer": "c"
+    },
+    {
+        "id": "q4",
+        "text": "En el diagrama de bloques de un analizador de espectro que utiliza el método heterodino, ¿cuál es la función principal del mezclador?",
+        "options": [
+            { "value": "a", "text": "Amplificar la señal de entrada para mejorar la sensibilidad del equipo." },
+            { "value": "b", "text": "Combinar la señal de entrada con una señal de oscilador local para convertirla a una frecuencia intermedia." },
+            { "value": "c", "text": "Filtrar las señales no deseadas antes de que lleguen al detector." }
+        ],
+        "correctAnswer": "b"
+    },
+    {
+        "id": "q5",
+        "text": "¿Qué parámetro ajusta el rango de frecuencias que el analizador de espectro puede observar simultáneamente?",
+        "options": [
+            { "value": "a", "text": "Span (rango de frecuencia)." },
+            { "value": "b", "text": "Nivel de referencia (Reference Level)." },
+            { "value": "c", "text": "Factor de atenuación (Attenuation)." }
+        ],
+        "correctAnswer": "a"
+    }
+]
