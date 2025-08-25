@@ -38,6 +38,7 @@ app.get('/questions', async (req, res) => {
     }
 });
 
+
 app.post('/submit', async (req, res) => {
     const { nombre, apellido, correo, answers, type, justifications, ip } = req.body;
 
@@ -45,55 +46,79 @@ app.post('/submit', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Por favor completa los campos de nombre, apellido y correo.' });
     }
 
-    const existing = await new Promise((resolve) => {
-        db.get('SELECT * FROM responses WHERE correo = ? OR ip = ?', [correo, ip], (err, row) => {
-            resolve(row);
-        });
-    });
-
-    if (existing) {
-        return res.status(400).json({ success: false, message: 'Este correo o dispositivo ya ha enviado el cuestionario.' });
-    }
-
-    const questions = JSON.parse(await fs.readFile('questions.json'));
-    const correctAnswers = {};
-    questions.forEach(q => {
-        correctAnswers[q.id] = q.correctAnswer;
-    });
-
-    let score = 0;
-    const feedback = {};
-    questions.forEach(q => {
-        feedback[q.id] = { correct: answers?.[q.id] === correctAnswers[q.id] && justifications?.[q.id] };
-        if (answers?.[q.id] && justifications?.[q.id] && feedback[q.id].correct) score++;
-    });
-
-    const answersData = {};
-    questions.forEach(q => {
-        answersData[q.id] = {
-            value: answers?.[q.id] || 'No respondida',
-            correct: feedback[q.id].correct,
-            message: answers?.[q.id] && justifications?.[q.id]
-                ? (feedback[q.id].correct ? 'Correcta' : `Incorrecta, la respuesta correcta es ${q.options.find(opt => opt.value === q.correctAnswer).text}`)
-                : 'No evaluada (falta justificación o respuesta)'
-        };
-    });
-
-    const data = {
-        type: type === 'manual' ? 'Manual' : 'Automático',
-        fecha: new Date().toLocaleString('es-ES'),
-        nombre,
-        apellido,
-        correo,
-        ip,
-        score,
-        total: questions.length,
-        answers: answersData,
-        justifications: justifications || {},
-        corrected: false
-    };
-
     try {
+        // Asegurar que la tabla responses exista
+        await new Promise((resolve, reject) => {
+            db.run(`CREATE TABLE IF NOT EXISTS responses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT,
+                apellido TEXT,
+                correo TEXT,
+                ip TEXT,
+                type TEXT,
+                fecha TEXT,
+                score INTEGER,
+                total INTEGER,
+                answers TEXT,
+                justifications TEXT,
+                corrected INTEGER,
+                feedback TEXT
+            )`, (err) => {
+                if (err) reject(err);
+                resolve();
+            });
+        });
+
+        // Verificar si el correo o IP ya existen
+        const existing = await new Promise((resolve) => {
+            db.get('SELECT * FROM responses WHERE correo = ? OR ip = ?', [correo, ip], (err, row) => {
+                if (err) console.error('Error al verificar existente:', err);
+                resolve(row);
+            });
+        });
+
+        if (existing) {
+            return res.status(400).json({ success: false, message: 'Este correo o dispositivo ya ha enviado el cuestionario.' });
+        }
+
+        const questions = JSON.parse(await fs.readFile('questions.json'));
+        const correctAnswers = {};
+        questions.forEach(q => {
+            correctAnswers[q.id] = q.correctAnswer;
+        });
+
+        let score = 0;
+        const feedback = {};
+        questions.forEach(q => {
+            feedback[q.id] = { correct: answers?.[q.id] === correctAnswers[q.id] && justifications?.[q.id] };
+            if (answers?.[q.id] && justifications?.[q.id] && feedback[q.id].correct) score++;
+        });
+
+        const answersData = {};
+        questions.forEach(q => {
+            answersData[q.id] = {
+                value: answers?.[q.id] || 'No respondida',
+                correct: feedback[q.id].correct,
+                message: answers?.[q.id] && justifications?.[q.id]
+                    ? (feedback[q.id].correct ? 'Correcta' : `Incorrecta, la respuesta correcta es ${q.options.find(opt => opt.value === q.correctAnswer).text}`)
+                    : 'No evaluada (falta justificación o respuesta)'
+            };
+        });
+
+        const data = {
+            type: type === 'manual' ? 'Manual' : 'Automático',
+            fecha: new Date().toLocaleString('es-ES'),
+            nombre,
+            apellido,
+            correo,
+            ip,
+            score,
+            total: questions.length,
+            answers: answersData,
+            justifications: justifications || {},
+            corrected: false
+        };
+
         await new Promise((resolve, reject) => {
             db.run('INSERT INTO responses (nombre, apellido, correo, ip, type, fecha, score, total, answers, justifications, corrected, feedback) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [nombre, apellido, correo, ip, data.type, data.fecha, score, data.total, JSON.stringify(data.answers), JSON.stringify(data.justifications), 0, JSON.stringify(data.answers)],
@@ -102,6 +127,7 @@ app.post('/submit', async (req, res) => {
                     resolve();
                 });
         });
+
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         res.set('Pragma', 'no-cache');
         res.set('Expires', '0');
@@ -112,12 +138,37 @@ app.post('/submit', async (req, res) => {
     }
 });
 
+
+
 app.get('/check-results', async (req, res) => {
     const { correo } = req.query;
 
     try {
+        // Asegurar que la tabla responses exista
+        await new Promise((resolve, reject) => {
+            db.run(`CREATE TABLE IF NOT EXISTS responses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT,
+                apellido TEXT,
+                correo TEXT,
+                ip TEXT,
+                type TEXT,
+                fecha TEXT,
+                score INTEGER,
+                total INTEGER,
+                answers TEXT,
+                justifications TEXT,
+                corrected INTEGER,
+                feedback TEXT
+            )`, (err) => {
+                if (err) reject(err);
+                resolve();
+            });
+        });
+
         const row = await new Promise((resolve) => {
             db.get('SELECT * FROM responses WHERE correo = ?', [correo], (err, row) => {
+                if (err) console.error('Error al consultar resultados:', err);
                 resolve(row);
             });
         });
@@ -126,6 +177,9 @@ app.get('/check-results', async (req, res) => {
             return res.json({ success: false, message: 'No se encontró el cuestionario.' });
         }
 
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         res.json({
             success: true,
             corrected: row.corrected,
@@ -139,6 +193,8 @@ app.get('/check-results', async (req, res) => {
         res.status(500).json({ success: false, message: 'Error al consultar resultados.' });
     }
 });
+
+
 
 app.post('/view-responses', async (req, res) => {
     const { password } = req.body;
@@ -291,6 +347,7 @@ app.post('/reset-quiz', async (req, res) => {
         res.status(500).json({ success: false, message: 'Error al resetear el cuestionario. Por favor intenta de nuevo.' });
     }
 });
+
 
 
 app.get('/admin', (req, res) => {
