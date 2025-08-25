@@ -226,6 +226,7 @@ app.post('/update-feedback', async (req, res) => {
     }
 });
 
+
 app.post('/reset-quiz', async (req, res) => {
     const { password } = req.body;
     if (password !== process.env.ADMIN_PASSWORD) {
@@ -233,21 +234,64 @@ app.post('/reset-quiz', async (req, res) => {
     }
 
     try {
+        // Eliminar todas las respuestas
         await new Promise((resolve, reject) => {
             db.run('DELETE FROM responses', (err) => {
                 if (err) reject(err);
                 resolve();
             });
         });
-        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        res.set('Pragma', 'no-cache');
-        res.set('Expires', '0');
-        res.json({ success: true, message: 'Cuestionario reseteado correctamente.' });
+
+        // Opcional: Forzar la sincronización de la base de datos
+        await new Promise((resolve, reject) => {
+            db.run('VACUUM', (err) => {
+                if (err) reject(err);
+                resolve();
+            });
+        });
+
+        // Cerrar y reabrir la conexión para asegurar que los cambios se propaguen
+        db.close((err) => {
+            if (err) {
+                console.error('Error al cerrar la base de datos:', err);
+            }
+            // Reabrir la conexión
+            const newDb = new sqlite3.Database('quiz.db', (err) => {
+                if (err) {
+                    console.error('Error al reconectar a la base de datos:', err);
+                } else {
+                    // Reasignar la conexión global
+                    db = newDb;
+                    // Volver a crear la tabla por si acaso
+                    db.run(`CREATE TABLE IF NOT EXISTS responses (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        nombre TEXT,
+                        apellido TEXT,
+                        correo TEXT,
+                        ip TEXT,
+                        type TEXT,
+                        fecha TEXT,
+                        score INTEGER,
+                        total INTEGER,
+                        answers TEXT,
+                        justifications TEXT,
+                        corrected INTEGER,
+                        feedback TEXT
+                    )`);
+                }
+                // Responder al cliente
+                res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+                res.set('Pragma', 'no-cache');
+                res.set('Expires', '0');
+                res.json({ success: true, message: 'Cuestionario reseteado correctamente.' });
+            });
+        });
     } catch (error) {
         console.error('Error al resetear el cuestionario:', error);
         res.status(500).json({ success: false, message: 'Error al resetear el cuestionario. Por favor intenta de nuevo.' });
     }
 });
+
 
 app.get('/admin', (req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
