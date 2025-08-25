@@ -29,7 +29,6 @@ function getDbConnection() {
                     console.error('Error al crear la tabla:', err);
                     return reject(err);
                 }
-                console.log('Tabla responses creada o ya existente');
                 resolve(db);
             });
         });
@@ -42,6 +41,25 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('.'));
 
+const db = new sqlite3.Database('quiz.db', (err) => {
+    if (err) console.error('Error al conectar a la base de datos:', err);
+    db.run(`CREATE TABLE IF NOT EXISTS responses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT,
+        apellido TEXT,
+        correo TEXT,
+        ip TEXT,
+        type TEXT,
+        fecha TEXT,
+        score INTEGER,
+        total INTEGER,
+        answers TEXT,
+        justifications TEXT,
+        corrected INTEGER,
+        feedback TEXT
+    )`);
+});
+
 app.get('/questions', async (req, res) => {
     try {
         const questions = JSON.parse(await fs.readFile('questions.json'));
@@ -51,6 +69,8 @@ app.get('/questions', async (req, res) => {
         res.status(500).json({ success: false, message: 'Error al cargar preguntas.' });
     }
 });
+
+
 
 app.post('/submit', async (req, res) => {
     const { nombre, apellido, correo, answers, type, justifications, ip } = req.body;
@@ -147,6 +167,9 @@ app.post('/submit', async (req, res) => {
     }
 });
 
+
+
+
 app.get('/check-results', async (req, res) => {
     const { correo } = req.query;
 
@@ -193,30 +216,27 @@ app.get('/check-results', async (req, res) => {
     }
 });
 
+
+
+
+
 app.post('/view-responses', async (req, res) => {
     const { password } = req.body;
     if (password !== process.env.ADMIN_PASSWORD) {
         return res.status(401).json({ success: false, message: 'Clave incorrecta.' });
     }
 
-    let db;
     try {
-        db = await getDbConnection();
-        db.serialize(async () => {
-            const rows = await new Promise((resolve) => {
-                db.all('SELECT * FROM responses', [], (err, rows) => {
-                    if (err) {
-                        console.error('Error al obtener respuestas:', err);
-                        return resolve([]);
-                    }
-                    resolve(rows);
-                });
+        const rows = await new Promise((resolve) => {
+            db.all('SELECT * FROM responses', [], (err, rows) => {
+                resolve(rows);
             });
+        });
 
-            const formattedResponses = rows.length > 0 ? rows.map(r => {
-                const answers = JSON.parse(r.answers);
-                const justifications = JSON.parse(r.justifications);
-                return `
+        const formattedResponses = rows.length > 0 ? rows.map(r => {
+            const answers = JSON.parse(r.answers);
+            const justifications = JSON.parse(r.justifications);
+            return `
 ----------------------------------------
 Envío: ${r.type}
 Fecha: ${r.fecha}
@@ -233,23 +253,15 @@ Comentario ${q.replace('q', '')}: ${answers[q].comment || 'Sin comentario'}
 Corregido: ${r.corrected ? 'Sí' : 'No'}
 ----------------------------------------
 `;
-            }).join('') : 'No hay respuestas disponibles.';
+        }).join('') : 'No hay respuestas disponibles.';
 
-            res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            res.set('Pragma', 'no-cache');
-            res.set('Expires', '0');
-            res.json({ success: true, responses: formattedResponses });
-        });
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+        res.json({ success: true, responses: formattedResponses });
     } catch (error) {
         console.error('Error al leer respuestas:', error);
         res.status(500).json({ success: false, message: 'Error al leer las respuestas. Por favor intenta de nuevo.' });
-    } finally {
-        if (db) {
-            db.close((err) => {
-                if (err) console.error('Error al cerrar la base de datos:', err);
-                console.log('Conexión a la base de datos cerrada');
-            });
-        }
     }
 });
 
@@ -260,61 +272,40 @@ app.post('/update-feedback', async (req, res) => {
         return res.status(401).json({ success: false, message: 'Clave incorrecta.' });
     }
 
-    let db;
     try {
-        db = await getDbConnection();
-        db.serialize(async () => {
-            const row = await new Promise((resolve) => {
-                db.get('SELECT * FROM responses WHERE correo = ?', [studentEmail], (err, row) => {
-                    if (err) {
-                        console.error('Error al buscar respuesta:', err);
-                        return resolve(null);
-                    }
-                    resolve(row);
-                });
+        const row = await new Promise((resolve) => {
+            db.get('SELECT * FROM responses WHERE correo = ?', [studentEmail], (err, row) => {
+                resolve(row);
             });
-
-            if (!row) {
-                return res.json({ success: false, message: 'No se encontró el cuestionario.' });
-            }
-
-            const answers = JSON.parse(row.answers);
-            let totalScore = row.score;
-            if (answers[questionNumber].correct && score == 0) totalScore--;
-            if (!answers[questionNumber].correct && score == 1) totalScore++;
-            answers[questionNumber].score = parseInt(score);
-            answers[questionNumber].comment = comment;
-
-            await new Promise((resolve, reject) => {
-                db.run('UPDATE responses SET answers = ?, score = ?, corrected = 1 WHERE correo = ?',
-                    [JSON.stringify(answers), totalScore, studentEmail],
-                    (err) => {
-                        if (err) {
-                            console.error('Error al actualizar corrección:', err);
-                            return reject(err);
-                        }
-                        console.log('Corrección actualizada correctamente');
-                        resolve();
-                    });
-            });
-
-            res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            res.set('Pragma', 'no-cache');
-            res.set('Expires', '0');
-            res.json({ success: true, message: 'Corrección actualizada.' });
         });
+
+        if (!row) {
+            return res.json({ success: false, message: 'No se encontró el cuestionario.' });
+        }
+
+        const answers = JSON.parse(row.answers);
+        let totalScore = row.score;
+        if (answers[questionNumber].correct && score == 0) totalScore--;
+        if (!answers[questionNumber].correct && score == 1) totalScore++;
+        answers[questionNumber].score = parseInt(score);
+        answers[questionNumber].comment = comment;
+
+        await new Promise((resolve, reject) => {
+            db.run('UPDATE responses SET answers = ?, score = ?, corrected = 1 WHERE correo = ?',
+                [JSON.stringify(answers), totalScore, studentEmail],
+                (err) => {
+                    if (err) reject(err);
+                    resolve();
+                });
+        });
+
+        res.json({ success: true, message: 'Corrección actualizada.' });
     } catch (error) {
         console.error('Error al actualizar corrección:', error);
         res.status(500).json({ success: false, message: 'Error al actualizar corrección.' });
-    } finally {
-        if (db) {
-            db.close((err) => {
-                if (err) console.error('Error al cerrar la base de datos:', err);
-                console.log('Conexión a la base de datos cerrada');
-            });
-        }
     }
 });
+
 
 app.post('/reset-quiz', async (req, res) => {
     const { password } = req.body;
@@ -361,6 +352,8 @@ app.post('/reset-quiz', async (req, res) => {
         }
     }
 });
+
+
 
 app.get('/admin', (req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
